@@ -1,0 +1,8 @@
+# Downloaded and processed data (large, regenerable from the manifest)
+data/
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/

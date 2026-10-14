@@ -1,0 +1,33 @@
+# Research topics the scraper collects. Each topic's final PubMed query is:
+#
+#     (device_filter) AND (topic query)
+#
+# Edit queries here, not in code. Test a change with:
+#     uv run pubmed-scraper count <topic>
+#
+# Field tags: [tiab] = title/abstract, [MeSH Terms] = NLM indexing (includes
+# narrower terms), [MeSH Major Topic] = indexed as a main subject of the paper.
+
+[device_filter]
+# Papers where NLM indexed a device or piece of equipment as a main subject.
+# MeSH tree E07 ("Equipment and Supplies") covers implants, prostheses,
+# surgical instruments, catheters, etc. It also includes laboratory equipment,
+# so expect some lab-method papers in the results.
+query = '"Equipment and Supplies"[MeSH Major Topic]'
+
+[topics.in_vitro]
+label = "In vitro"
+query = '"in vitro"[tiab] OR "In Vitro Techniques"[MeSH Terms]'
+
+# Planned next. Uncomment once in vitro looks right.
+# [topics.in_vivo]
+# label = "In vivo"
+# query = '"in vivo"[tiab]'
+#
+# [topics.safety]
+# label = "Safety"
+# query = 'safety[tiab] OR "Equipment Safety"[MeSH Terms]'
+#
+# [topics.effectiveness]
+# label = "Effectiveness"
+# query = 'effectiveness[tiab] OR efficacy[tiab] OR "Treatment Outcome"[MeSH Terms]'
