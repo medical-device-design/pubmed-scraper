@@ -34,6 +34,11 @@ class SettingsTest(unittest.TestCase):
     def test_missing_file_is_empty(self):
         self.assertEqual(settings.read_env_file(Path(self.tmp.name) / "nope"), {})
 
+    def test_folder_named_env_is_ignored(self):
+        folder = Path(self.tmp.name) / "env-folder"
+        folder.mkdir()
+        self.assertEqual(settings.read_env_file(folder), {})
+
     def test_environment_variable_wins(self):
         with mock.patch.dict(os.environ, {"NCBI_EMAIL": "override@example.edu"}):
             self.assertEqual(settings.get("NCBI_EMAIL", path=self.env), "override@example.edu")

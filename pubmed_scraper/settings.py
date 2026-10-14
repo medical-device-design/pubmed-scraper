@@ -19,7 +19,7 @@ def read_env_file(path=ENV_FILE):
     ignored, and matching quotes around a value are stripped."""
     values = {}
     path = Path(path)
-    if not path.exists():
+    if not path.is_file():      # missing, or a folder by mistake: no settings
         return values
     for line in path.read_text(encoding="utf-8-sig").splitlines():
         line = line.strip()
