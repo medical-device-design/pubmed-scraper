@@ -5,20 +5,19 @@ NCBI policy (https://www.ncbi.nlm.nih.gov/books/NBK25497/):
   * send `tool` and `email` with every request
   * run large jobs on weekends or 9 PM - 5 AM US Eastern on weekdays
 
-Configure with environment variables:
+Configure in the repo's .env file (see .env.example) or as environment variables:
   NCBI_EMAIL    contact email for the developer (strongly recommended)
   NCBI_API_KEY  raises the limit to 10 requests/second (optional)
   NCBI_TOOL     tool name sent to NCBI (default: pubmed-scraper)
 """
 
 import json
-import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 
-from . import __version__
+from . import __version__, settings
 
 BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
 USER_AGENT = f"pubmed-scraper/{__version__} (medical-device-design)"
@@ -27,9 +26,9 @@ RETRY_STATUSES = {429, 500, 502, 503, 504}
 
 class EUtils:
     def __init__(self, email=None, api_key=None, tool=None, timeout=120):
-        self.email = email if email is not None else os.environ.get("NCBI_EMAIL", "")
-        self.api_key = api_key if api_key is not None else os.environ.get("NCBI_API_KEY", "")
-        self.tool = tool or os.environ.get("NCBI_TOOL", "pubmed-scraper")
+        self.email = email if email is not None else settings.get("NCBI_EMAIL")
+        self.api_key = api_key if api_key is not None else settings.get("NCBI_API_KEY")
+        self.tool = tool or settings.get("NCBI_TOOL") or "pubmed-scraper"
         self.timeout = timeout
         self.min_interval = 0.11 if self.api_key else 0.34
         self._last = 0.0
@@ -50,10 +49,12 @@ class EUtils:
 
     def request(self, util, params, post=False, retries=4):
         """GET (or POST, for long ID lists) one E-utility. Returns (url, bytes).
-        The returned URL never includes the API key, so it is safe to log."""
+        The returned URL leaves out the API key and email, so it is safe to log
+        and to store in manifests that may be shared."""
         params = self._params(params)
         safe_url = BASE + util + "?" + urllib.parse.urlencode(
-            {k: v for k, v in params.items() if k != "api_key" and not (post and k == "id")})
+            {k: v for k, v in params.items()
+             if k not in ("api_key", "email") and not (post and k == "id")})
         url = BASE + util
         data = None
         if post:

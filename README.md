@@ -7,24 +7,50 @@ and turns them into tables ready for loading into the medical-device-kg graph.
 
 ## Setup
 
-Needs [uv](https://docs.astral.sh/uv/). No other dependencies.
+Needs Python 3.11 or newer. Run these from the repo root.
 
-Set a contact email (NCBI asks every client to send one). An API key is
-optional and raises the rate limit from 3 to 10 requests per second.
+**1. Create and activate a virtual environment** (once; the `.venv` folder is
+git-ignored)
 
+Windows (PowerShell):
 ```powershell
-$env:NCBI_EMAIL = "you@hofstra.edu"
-$env:NCBI_API_KEY = "..."        # optional, from your NCBI account settings
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 ```
+
+Linux / macOS / the VM:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Your prompt shows `(.venv)` while it is active. Activate it again in each new
+terminal. If PowerShell refuses to run `Activate.ps1`, allow local scripts once
+with `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+**2. Install requirements**
+```bash
+pip install -r requirements.txt
+```
+(There are none yet; the scraper uses only Python's standard library. This
+step keeps setup the same once packages are added.)
+
+**3. Add your NCBI settings.** Copy `.env.example` to `.env` and fill in your
+contact email (NCBI asks every client to send one). The API key is optional and
+raises the rate limit from 3 to 10 requests per second. `.env` is git-ignored,
+so your key stays on your machine. A real environment variable with the same
+name (for example on the VM) overrides the value in `.env`.
 
 ## Usage
 
-```powershell
-uv run pubmed-scraper topics                       # list topics and their queries
-uv run pubmed-scraper count in_vitro               # papers matching a topic
-uv run pubmed-scraper fetch in_vitro --limit 200   # sample: 200 most recent
-uv run pubmed-scraper fetch in_vitro               # everything matching
-uv run pubmed-scraper parse in_vitro               # latest fetch -> tables
+With the environment active, from the repo root:
+
+```bash
+python -m pubmed_scraper topics                       # list topics and their queries
+python -m pubmed_scraper count in_vitro               # papers matching a topic
+python -m pubmed_scraper fetch in_vitro --limit 200   # sample: 200 most recent
+python -m pubmed_scraper fetch in_vitro               # everything matching
+python -m pubmed_scraper parse in_vitro               # latest fetch -> tables
 ```
 
 Queries live in `topics.toml`. Each topic's query is combined with the shared
@@ -54,6 +80,6 @@ Proto-OKN Fabric).
 
 ## Tests
 
-```powershell
-uv run python -m unittest discover -s tests
+```bash
+python -m unittest discover -s tests
 ```

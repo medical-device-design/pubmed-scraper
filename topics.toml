@@ -3,7 +3,7 @@
 #     (device_filter) AND (topic query)
 #
 # Edit queries here, not in code. Test a change with:
-#     uv run pubmed-scraper count <topic>
+#     python -m pubmed_scraper count <topic>
 #
 # Field tags: [tiab] = title/abstract, [MeSH Terms] = NLM indexing (includes
 # narrower terms), [MeSH Major Topic] = indexed as a main subject of the paper.

@@ -74,7 +74,8 @@ def fetch(topic, data_dir="data", limit=None, batch_size=200, sort="pub_date",
           client=None, log=print):
     client = client or EUtils()
     if not client.email:
-        log("note: NCBI_EMAIL is not set. NCBI asks every client to send a contact email.")
+        log("note: NCBI_EMAIL is not set. Add it to .env (see .env.example); "
+            "NCBI asks every client to send a contact email.")
 
     started = datetime.now(timezone.utc)
     run_dir = Path(data_dir) / "raw" / topic.name / started.strftime("%Y%m%d-%H%M%S")

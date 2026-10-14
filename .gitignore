@@ -1,3 +1,6 @@
+# Local settings: email and API key
+.env
+
 # Downloaded and processed data (large, regenerable from the manifest)
 data/
 
@@ -5,4 +8,3 @@ data/
 .venv/
 __pycache__/
 *.py[cod]
-*.egg-info/

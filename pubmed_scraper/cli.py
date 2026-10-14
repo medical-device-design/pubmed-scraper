@@ -1,10 +1,11 @@
-"""Command line: count, fetch, parse.
+"""Command line: topics, count, fetch, parse. Run with the virtual environment
+active (see README):
 
-    uv run pubmed-scraper topics
-    uv run pubmed-scraper count in_vitro
-    uv run pubmed-scraper fetch in_vitro --limit 200      # sample: most recent 200
-    uv run pubmed-scraper fetch in_vitro                  # everything matching
-    uv run pubmed-scraper parse in_vitro                  # latest finished fetch
+    python -m pubmed_scraper topics
+    python -m pubmed_scraper count in_vitro
+    python -m pubmed_scraper fetch in_vitro --limit 200   # sample: most recent 200
+    python -m pubmed_scraper fetch in_vitro               # everything matching
+    python -m pubmed_scraper parse in_vitro               # latest finished fetch
 """
 
 import argparse
@@ -17,6 +18,7 @@ from .eutils import EUtils
 from .export import export
 from .fetch import fetch
 from .parse import parse_run
+from .settings import DATA_DIR
 
 
 def latest_run(data_dir, topic):
@@ -29,10 +31,12 @@ def latest_run(data_dir, topic):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(prog="pubmed-scraper", description=__doc__,
+    ap = argparse.ArgumentParser(prog="python -m pubmed_scraper", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--config", default=str(DEFAULT_CONFIG), help="topics file (default: topics.toml)")
-    ap.add_argument("--data-dir", default="data", help="where raw and processed data go (default: data)")
+    ap.add_argument("--config", default=str(DEFAULT_CONFIG),
+                    help="topics file (default: topics.toml in the repo)")
+    ap.add_argument("--data-dir", default=str(DATA_DIR),
+                    help="where raw and processed data go (default: data/ in the repo)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("topics", help="list configured topics and their full queries")

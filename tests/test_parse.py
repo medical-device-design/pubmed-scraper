@@ -1,4 +1,5 @@
-"""Parser tests on a synthetic PubMed record. Run: uv run python -m unittest"""
+"""Parser tests on a synthetic PubMed record.
+Run from the repo root: python -m unittest discover -s tests"""
 
 import unittest
 import xml.etree.ElementTree as ET

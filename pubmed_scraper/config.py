@@ -4,7 +4,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_CONFIG = Path("topics.toml")
+from .settings import TOPICS_FILE as DEFAULT_CONFIG
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,7 @@ class Topic:
 def load_topics(path=DEFAULT_CONFIG):
     path = Path(path)
     if not path.exists():
-        raise SystemExit(f"config not found: {path} (run from the repo root, or pass --config)")
+        raise SystemExit(f"config not found: {path} (pass --config to use another file)")
     cfg = tomllib.loads(path.read_text(encoding="utf-8"))
     device = (cfg.get("device_filter") or {}).get("query", "").strip()
     topics = {}

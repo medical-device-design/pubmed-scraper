@@ -1,0 +1,5 @@
+# Third-party packages for pubmed-scraper. Install inside the virtual
+# environment with:  pip install -r requirements.txt
+#
+# None yet: the scraper uses only Python's standard library. Add packages
+# here (with versions, e.g. requests==2.32.3) when the code starts using them.
