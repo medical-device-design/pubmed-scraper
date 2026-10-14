@@ -17,7 +17,7 @@ from .config import DEFAULT_CONFIG, get_topic, load_topics
 from .eutils import EUtils
 from .export import export
 from .fetch import fetch
-from .parse import parse_run
+from .parse import iter_run
 from .settings import DATA_DIR
 
 
@@ -74,9 +74,9 @@ def main(argv=None):
     if a.cmd == "parse":
         run = Path(a.run) if a.run else latest_run(a.data_dir, topic.name)
         manifest = json.loads((run / "manifest.json").read_text(encoding="utf-8"))
-        records, stats = parse_run(run)
+        stats = {}
         out = Path(a.data_dir) / "processed" / topic.name / run.name
-        summary = export(records, out, topic.name, manifest, stats)
+        summary = export(iter_run(run, stats), out, topic.name, manifest, stats)
         print(f"parsed {summary['records']:,} papers from {run}")
         print(f"  with abstract {summary['with_abstract']:,} | DOI {summary['with_doi']:,} | "
               f"in PMC {summary['in_pmc']:,} | NCT id {summary['with_nct_id']:,} | "

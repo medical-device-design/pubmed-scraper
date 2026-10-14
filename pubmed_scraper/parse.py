@@ -166,17 +166,25 @@ def parse_article(art):
     }
 
 
-def parse_run(run_dir):
-    """All records in a fetch run, de-duplicated by PMID, plus counts."""
-    run_dir = Path(run_dir)
-    records, seen, books = [], set(), 0
-    for path in sorted(run_dir.glob("efetch-*.xml")):
+def iter_run(run_dir, stats):
+    """Yield the records of a fetch run one at a time, de-duplicated by PMID.
+
+    Only one batch file is in memory at a time, so a run of any size parses in
+    constant memory. `stats` (a dict) is filled in as records are read."""
+    stats.setdefault("records", 0)
+    stats.setdefault("duplicates_skipped", 0)
+    stats.setdefault("book_articles_skipped", 0)
+    seen = set()
+    for path in sorted(Path(run_dir).glob("efetch-*.xml")):
         root = ET.parse(path).getroot()
-        books += sum(1 for _ in root.iter("PubmedBookArticle"))
+        stats["book_articles_skipped"] += sum(1 for _ in root.iter("PubmedBookArticle"))
         for art in root.iter("PubmedArticle"):
             rec = parse_article(art)
-            if rec["pmid"] and rec["pmid"] not in seen:
-                seen.add(rec["pmid"])
-                rec["source_file"] = path.name
-                records.append(rec)
-    return records, {"records": len(records), "book_articles_skipped": books}
+            if not rec["pmid"] or rec["pmid"] in seen:
+                stats["duplicates_skipped"] += 1
+                continue
+            seen.add(rec["pmid"])
+            rec["source_file"] = path.name
+            stats["records"] += 1
+            yield rec
+        del root
