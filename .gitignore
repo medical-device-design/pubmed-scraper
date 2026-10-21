@@ -4,6 +4,9 @@
 # Downloaded and processed data (large, regenerable from the manifest)
 data/
 
+# Pipeline run logs and status files (scripts/run_pipeline.sh)
+logs/
+
 # Python
 .venv/
 __pycache__/

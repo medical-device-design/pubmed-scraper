@@ -16,6 +16,10 @@ _MONTHS = {m: i for i, m in enumerate(
 # FDA records already in the medical-device-kg graph.
 _FDA_NUMBER = re.compile(r"(?<![A-Za-z0-9])(DEN\d{6}|K\d{6}|P\d{6})(?![0-9])", re.IGNORECASE)
 
+# ClinicalTrials.gov registration numbers written in the title or abstract.
+# Kept apart from the ones NLM records in the DataBankList, which are curated.
+_NCT_NUMBER = re.compile(r"(?<![A-Za-z0-9])(NCT\d{8})(?![0-9])", re.IGNORECASE)
+
 
 def text_of(el):
     """All text inside an element (titles and abstracts contain <i>, <sup>,
@@ -53,12 +57,20 @@ def partial_date(el):
     return year
 
 
-def fda_numbers(*texts):
+def _find(pattern, texts):
     found = set()
     for t in texts:
         if t:
-            found.update(m.group(1).upper() for m in _FDA_NUMBER.finditer(t))
+            found.update(m.group(1).upper() for m in pattern.finditer(t))
     return sorted(found)
+
+
+def fda_numbers(*texts):
+    return _find(_FDA_NUMBER, texts)
+
+
+def nct_numbers(*texts):
+    return _find(_NCT_NUMBER, texts)
 
 
 def parse_article(art):
@@ -162,29 +174,40 @@ def parse_article(art):
                     "country": g.findtext("Country")} for g in a.findall("GrantList/Grant")],
         "databanks": databanks,
         "nct_ids": nct_ids,
+        "nct_ids_in_text": nct_numbers(title, abstract),
         "fda_numbers": fda_numbers(title, abstract),
     }
 
 
-def iter_run(run_dir, stats):
-    """Yield the records of a fetch run one at a time, de-duplicated by PMID.
+def iter_runs(run_dirs, stats):
+    """Yield the records of one or more fetch runs, one paper at a time.
 
-    Only one batch file is in memory at a time, so a run of any size parses in
-    constant memory. `stats` (a dict) is filled in as records are read."""
+    Runs are read newest first, and each PMID is kept only the first time it
+    is seen, so when a paper appears in several runs (a full run plus updates)
+    its newest copy wins. Only one batch file is in memory at a time, so any
+    number of papers parses in constant memory. `stats` (a dict) is filled in
+    as records are read."""
     stats.setdefault("records", 0)
     stats.setdefault("duplicates_skipped", 0)
     stats.setdefault("book_articles_skipped", 0)
     seen = set()
-    for path in sorted(Path(run_dir).glob("efetch-*.xml")):
-        root = ET.parse(path).getroot()
-        stats["book_articles_skipped"] += sum(1 for _ in root.iter("PubmedBookArticle"))
-        for art in root.iter("PubmedArticle"):
-            rec = parse_article(art)
-            if not rec["pmid"] or rec["pmid"] in seen:
-                stats["duplicates_skipped"] += 1
-                continue
-            seen.add(rec["pmid"])
-            rec["source_file"] = path.name
-            stats["records"] += 1
-            yield rec
-        del root
+    for run_dir in sorted((Path(r) for r in run_dirs), key=lambda p: p.name, reverse=True):
+        for path in sorted(run_dir.glob("efetch-*.xml")):
+            root = ET.parse(path).getroot()
+            stats["book_articles_skipped"] += sum(1 for _ in root.iter("PubmedBookArticle"))
+            for art in root.iter("PubmedArticle"):
+                rec = parse_article(art)
+                if not rec["pmid"] or rec["pmid"] in seen:
+                    stats["duplicates_skipped"] += 1
+                    continue
+                seen.add(rec["pmid"])
+                rec["source_run"] = run_dir.name
+                rec["source_file"] = path.name
+                stats["records"] += 1
+                yield rec
+            del root
+
+
+def iter_run(run_dir, stats):
+    """Records of a single fetch run (see iter_runs)."""
+    return iter_runs([run_dir], stats)

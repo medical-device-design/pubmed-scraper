@@ -22,7 +22,7 @@ SAMPLE = """
    <Pagination><MedlinePgn>100-110</MedlinePgn></Pagination>
    <ELocationID EIdType="doi" ValidYN="Y">10.1000/jds.2024.001</ELocationID>
    <Abstract>
-    <AbstractText Label="METHODS">Simulator testing of the P100047/S002 device.</AbstractText>
+    <AbstractText Label="METHODS">Simulator testing of the P100047/S002 device (trial nct02345678; not NCT1234567).</AbstractText>
     <AbstractText Label="RESULTS">Wear was low.</AbstractText>
    </Abstract>
    <AuthorList>
@@ -67,7 +67,8 @@ class ParseArticleTest(unittest.TestCase):
         self.assertEqual(self.r["pmid"], "31234567")
         self.assertEqual(self.r["title"], "In vitro wear of a titanium hip cup cleared under K033394.")
         self.assertEqual(self.r["abstract"],
-                         "METHODS: Simulator testing of the P100047/S002 device.\nRESULTS: Wear was low.")
+                         "METHODS: Simulator testing of the P100047/S002 device (trial nct02345678; "
+                         "not NCT1234567).\nRESULTS: Wear was low.")
         self.assertEqual(self.r["doi"], "10.1000/jds.2024.001")
         self.assertEqual(self.r["pmcid"], "PMC7654321")
 
@@ -87,8 +88,13 @@ class ParseArticleTest(unittest.TestCase):
         self.assertEqual(major, {"Hip Prosthesis", "Prosthesis Failure"})
 
     def test_links_to_trials_and_fda(self):
-        self.assertEqual(self.r["nct_ids"], ["NCT01234567"])
+        self.assertEqual(self.r["nct_ids"], ["NCT01234567"])              # NLM's linked-trials list
+        self.assertEqual(self.r["nct_ids_in_text"], ["NCT02345678"])      # written in the abstract
         self.assertEqual(self.r["fda_numbers"], ["K033394", "P100047"])
+
+    def test_grants(self):
+        self.assertEqual(self.r["grants"], [{"id": "R01 AR000000", "agency": "NIAMS NIH HHS",
+                                             "country": "United States"}])
 
     def test_partial_date_fallback(self):
         el = ET.fromstring("<PubDate><MedlineDate>2019 Jan-Feb</MedlineDate></PubDate>")

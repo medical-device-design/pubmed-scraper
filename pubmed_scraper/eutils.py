@@ -12,16 +12,12 @@ Configure in the repo's .env file (see .env.example) or as environment variables
 """
 
 import json
-import time
-import urllib.error
 import urllib.parse
-import urllib.request
 
-from . import __version__, settings
+from . import settings
+from .net import Http
 
 BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/"
-USER_AGENT = f"pubmed-scraper/{__version__} (medical-device-design)"
-RETRY_STATUSES = {429, 500, 502, 503, 504}
 
 
 class EUtils:
@@ -29,9 +25,7 @@ class EUtils:
         self.email = email if email is not None else settings.get("NCBI_EMAIL")
         self.api_key = api_key if api_key is not None else settings.get("NCBI_API_KEY")
         self.tool = tool or settings.get("NCBI_TOOL") or "pubmed-scraper"
-        self.timeout = timeout
-        self.min_interval = 0.11 if self.api_key else 0.34
-        self._last = 0.0
+        self.http = Http(min_interval=0.11 if self.api_key else 0.34, timeout=timeout)
 
     def _params(self, params):
         p = {"tool": self.tool, **params}
@@ -41,13 +35,7 @@ class EUtils:
             p["api_key"] = self.api_key
         return p
 
-    def _wait(self):
-        delay = self._last + self.min_interval - time.monotonic()
-        if delay > 0:
-            time.sleep(delay)
-        self._last = time.monotonic()
-
-    def request(self, util, params, post=False, retries=4):
+    def request(self, util, params, post=False):
         """GET (or POST, for long ID lists) one E-utility. Returns (url, bytes).
         The returned URL leaves out the API key and email, so it is safe to log
         and to store in manifests that may be shared."""
@@ -55,40 +43,28 @@ class EUtils:
         safe_url = BASE + util + "?" + urllib.parse.urlencode(
             {k: v for k, v in params.items()
              if k not in ("api_key", "email") and not (post and k == "id")})
-        url = BASE + util
-        data = None
         if post:
-            data = urllib.parse.urlencode(params).encode()
+            body = self.http.open(BASE + util, data=urllib.parse.urlencode(params).encode())
         else:
-            url += "?" + urllib.parse.urlencode(params)
-        for attempt in range(retries + 1):
-            self._wait()
-            req = urllib.request.Request(url, data=data, headers={"User-Agent": USER_AGENT})
-            try:
-                with urllib.request.urlopen(req, timeout=self.timeout) as r:
-                    return safe_url, r.read()
-            except urllib.error.HTTPError as e:
-                if e.code not in RETRY_STATUSES or attempt == retries:
-                    raise
-            except (urllib.error.URLError, TimeoutError):
-                if attempt == retries:
-                    raise
-            time.sleep(2 ** attempt)        # 1, 2, 4, 8 s
+            body = self.http.open(BASE + util + "?" + urllib.parse.urlencode(params))
+        return safe_url, body
 
     # ------------------------------------------------------------------
-    def esearch_count(self, term, mindate=None, maxdate=None):
+    # datetype: "pdat" publication date, "mdat" date the record last changed,
+    # "edat" date the record entered PubMed. Dates are YYYY/MM/DD.
+    def esearch_count(self, term, mindate=None, maxdate=None, datetype="pdat"):
         p = {"db": "pubmed", "term": term, "rettype": "count", "retmode": "json"}
         if mindate:
-            p.update(datetype="pdat", mindate=mindate, maxdate=maxdate)
+            p.update(datetype=datetype, mindate=mindate, maxdate=maxdate)
         _, body = self.request("esearch.fcgi", p)
         return int(json.loads(body)["esearchresult"]["count"])
 
-    def esearch_ids(self, term, retmax, sort=None, mindate=None, maxdate=None):
+    def esearch_ids(self, term, retmax, sort=None, mindate=None, maxdate=None, datetype="pdat"):
         p = {"db": "pubmed", "term": term, "retmode": "json", "retmax": str(retmax)}
         if sort:
             p["sort"] = sort
         if mindate:
-            p.update(datetype="pdat", mindate=mindate, maxdate=maxdate)
+            p.update(datetype=datetype, mindate=mindate, maxdate=maxdate)
         _, body = self.request("esearch.fcgi", p)
         return json.loads(body)["esearchresult"]["idlist"]
 

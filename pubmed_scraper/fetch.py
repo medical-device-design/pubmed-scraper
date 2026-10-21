@@ -10,18 +10,31 @@ Each run writes a new folder:
 Parsing works only from these saved files, so the data can be re-processed
 without contacting NCBI again. A run with no manifest.json did not finish and
 is ignored by `parse`.
+
+Three modes (see runs.py): full, sample (--limit), and update (--update).
+
+An update fetches papers whose PubMed record CHANGED since the previous run,
+not just papers that are new. That matters for our query: it filters on MeSH
+indexing, which NLM adds weeks after a paper first appears, so a paper often
+only starts matching once it is indexed. Searching by modification date
+catches it then. It also catches corrections and newly marked retractions.
+
+Updates cannot see papers that stop matching or are deleted from PubMed, so
+run a full fetch now and then (for example every quarter) to reset.
 """
 
 import hashlib
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from . import __version__
 from .eutils import EUtils
+from .runs import latest_run, mode_of, read_manifest
 
-ESEARCH_CAP = 9999      # ESearch cannot return more than 10,000 PubMed IDs per query
-FIRST_YEAR = 1800
+ESEARCH_CAP = 9999                  # ESearch cannot return more than 10,000 PubMed IDs per query
+FULL_START = date(1800, 1, 1)
+UPDATE_OVERLAP = timedelta(days=1)  # re-check the day before the last run; duplicates are dropped
 
 
 def _sha256(path):
@@ -32,61 +45,115 @@ def _sha256(path):
     return h.hexdigest()
 
 
-def date_windows(client, term, y0, y1, log=print):
-    """Yield (mindate, maxdate) publication-date windows that each hold at most
-    ESEARCH_CAP records: halve year ranges, then split a single year by month."""
-    n = client.esearch_count(term, f"{y0}/01/01", f"{y1}/12/31")
+def _fmt(d):
+    return d.strftime("%Y/%m/%d")
+
+
+def date_windows(client, term, start, end, datetype="pdat"):
+    """Yield (mindate, maxdate) windows covering start..end (inclusive dates)
+    that each hold at most ESEARCH_CAP records, by halving the range until
+    every piece fits. Raises if a single day holds more than the cap, rather
+    than silently returning a truncated list."""
+    n = client.esearch_count(term, _fmt(start), _fmt(end), datetype)
     if n == 0:
         return
     if n <= ESEARCH_CAP:
-        yield f"{y0}/01/01", f"{y1}/12/31"
+        yield _fmt(start), _fmt(end)
         return
-    if y0 < y1:
-        mid = (y0 + y1) // 2
-        yield from date_windows(client, term, y0, mid, log)
-        yield from date_windows(client, term, mid + 1, y1, log)
-        return
-    for m in range(1, 13):
-        nxt = date(y0 + (m == 12), m % 12 + 1, 1)
-        last = (nxt - date.resolution).day
-        lo, hi = f"{y0}/{m:02d}/01", f"{y0}/{m:02d}/{last:02d}"
-        k = client.esearch_count(term, lo, hi)
-        if k > ESEARCH_CAP:
-            raise RuntimeError(f"{k} records in {y0}-{m:02d} alone; narrow the query")
-        if k:
-            yield lo, hi
+    if start == end:
+        raise RuntimeError(f"{n:,} records on {start} alone, over the ESearch cap; narrow the query")
+    mid = start + (end - start) // 2
+    yield from date_windows(client, term, start, mid, datetype)
+    yield from date_windows(client, term, mid + timedelta(days=1), end, datetype)
 
 
-def collect_pmids(client, term, limit=None, sort="pub_date", log=print):
-    """PMIDs matching term. With limit: the first `limit` in `sort` order (one
-    request). Without: every match, gathered window by window."""
-    if limit:
-        return client.esearch_ids(term, retmax=min(limit, ESEARCH_CAP), sort=sort)
+def collect_pmids(client, term, start, end, datetype="pdat", log=print):
+    """Every PMID matching term with a `datetype` date in start..end."""
     pmids = set()
-    for lo, hi in date_windows(client, term, FIRST_YEAR, date.today().year + 1, log):
-        ids = client.esearch_ids(term, retmax=ESEARCH_CAP, mindate=lo, maxdate=hi)
+    for lo, hi in date_windows(client, term, start, end, datetype):
+        ids = client.esearch_ids(term, retmax=ESEARCH_CAP, mindate=lo, maxdate=hi, datetype=datetype)
         pmids.update(ids)
         log(f"  {lo} to {hi}: {len(ids):,} PMIDs (total so far {len(pmids):,})")
     return sorted(pmids, key=int)
 
 
-def fetch(topic, data_dir="data", limit=None, batch_size=200, sort="pub_date",
-          client=None, log=print):
+def plan_update(data_dir, topic):
+    """What an update run builds on: (previous_run, base_run, since_date).
+    Refuses when there is no full run, or when the topic's query has changed
+    since (an update would then mix two different scopes)."""
+    prev = latest_run(data_dir, topic.name, modes={"full", "update"})
+    if prev is None:
+        raise SystemExit(f"no full fetch for {topic.name!r} yet, so there is nothing to update. "
+                         f"Run a full fetch first: python -m pubmed_scraper fetch {topic.name}")
+    pm = read_manifest(prev)
+    if pm["query"] != topic.full_query:
+        raise SystemExit(f"the query for {topic.name!r} in topics.toml has changed since run "
+                         f"{prev.name}. An update would mix two different scopes; run a full "
+                         f"fetch instead.")
+    base_run = prev.name if mode_of(pm) == "full" else pm["base_run"]
+    since = date.fromisoformat(pm["started_at"][:10]) - UPDATE_OVERLAP
+    return prev, base_run, since
+
+
+def choose_auto(data_dir, topic, log=print):
+    """For --auto: update when there is a full run to build on and the query
+    is unchanged since; otherwise a full fetch. Returns True for update."""
+    prev = latest_run(data_dir, topic.name, modes={"full", "update"})
+    if prev is None:
+        log(f"auto: no full fetch for {topic.name!r} yet, so doing a full fetch")
+        return False
+    if read_manifest(prev)["query"] != topic.full_query:
+        log(f"auto: the query in topics.toml changed since run {prev.name}, so doing a full fetch")
+        return False
+    log(f"auto: updating on top of run {prev.name}")
+    return True
+
+
+def fetch(topic, data_dir="data", limit=None, update=False, auto=False, batch_size=200,
+          sort="pub_date", client=None, log=print):
+    if sum(map(bool, (limit, update, auto))) > 1:
+        raise SystemExit("choose only one of --limit, --update and --auto")
+    if auto:
+        update = choose_auto(data_dir, topic, log)
     client = client or EUtils()
     if not client.email:
         log("note: NCBI_EMAIL is not set. Add it to .env (see .env.example); "
             "NCBI asks every client to send a contact email.")
 
     started = datetime.now(timezone.utc)
+    today = started.date()
+    extra = {}
+
+    if update:
+        prev, base_run, since = plan_update(data_dir, topic)
+        start, end, datetype = since, today + timedelta(days=1), "mdat"
+        total = client.esearch_count(topic.full_query, _fmt(start), _fmt(end), datetype)
+        log(f"{topic.label}: {total:,} matching papers added or changed since {since} "
+            f"(update on top of {base_run})")
+        mode = "update"
+        extra = {"base_run": base_run, "previous_run": prev.name, "since": since.isoformat(),
+                 "datetype": datetype}
+    else:
+        total = client.esearch_count(topic.full_query)
+        log(f"{topic.label}: {total:,} matching papers in PubMed")
+        mode = "sample" if limit else "full"
+
     run_dir = Path(data_dir) / "raw" / topic.name / started.strftime("%Y%m%d-%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=False)
 
-    total = client.esearch_count(topic.full_query)
-    log(f"{topic.label}: {total:,} matching papers in PubMed")
-    pmids = collect_pmids(client, topic.full_query, limit=limit, sort=sort, log=log)
-    log(f"fetching {len(pmids):,} records{' (sample)' if limit else ''} into {run_dir}")
+    if limit:
+        pmids = client.esearch_ids(topic.full_query, retmax=min(limit, ESEARCH_CAP), sort=sort)
+    elif update:
+        pmids = collect_pmids(client, topic.full_query, start, end, datetype, log)
+    else:
+        pmids = collect_pmids(client, topic.full_query, FULL_START,
+                              date(today.year + 5, 12, 31), "pdat", log)
+        if len(pmids) < total:
+            log(f"warning: PubMed reports {total:,} matches but only {len(pmids):,} PMIDs were "
+                f"collected; papers with an unusual publication date may be missing")
+    log(f"fetching {len(pmids):,} records ({mode}) into {run_dir}")
 
-    (run_dir / "pmids.txt").write_text("\n".join(pmids) + "\n", encoding="utf-8")
+    (run_dir / "pmids.txt").write_text("".join(p + "\n" for p in pmids), encoding="utf-8")
     files, records = [], 0
     for b, i in enumerate(range(0, len(pmids), batch_size), 1):
         batch = pmids[i:i + batch_size]
@@ -107,6 +174,8 @@ def fetch(topic, data_dir="data", limit=None, batch_size=200, sort="pub_date",
         "topic": topic.name,
         "label": topic.label,
         "query": topic.full_query,
+        "mode": mode,
+        **extra,
         "total_matching": total,
         "sample_limit": limit,
         "sort": sort if limit else None,
