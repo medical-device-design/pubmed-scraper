@@ -1,10 +1,14 @@
 """Loads topics.toml and builds each topic's full PubMed query."""
 
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 from .settings import TOPICS_FILE as DEFAULT_CONFIG
+
+try:
+    import tomllib                       # Python 3.11+
+except ModuleNotFoundError:              # Python 3.10 (e.g. Ubuntu 22.04)
+    from . import toml_lite as tomllib
 
 
 @dataclass(frozen=True)

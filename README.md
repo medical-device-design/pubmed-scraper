@@ -7,13 +7,13 @@ and turns them into tables ready for loading into the medical-device-kg graph.
 
 ## Setup
 
-Needs Python 3.11 or newer. Run these from the repo root.
+Needs Python 3.10 or newer (Ubuntu 22.04's built-in Python 3.10 works). Run
+these from the repo root.
 
-On Ubuntu, install the venv package first, or step 1 fails with "ensurepip is
-not available": `sudo apt install -y python3-venv`. Ubuntu 22.04 ships Python
-3.10, which is too old; install a newer one with
-`sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt install -y python3.12 python3.12-venv`
-and use `python3.12` in place of `python3` below.
+On Ubuntu, step 1 needs the venv package, or it fails with "ensurepip is not
+available": `sudo apt install -y python3-venv`. Without sudo,
+`python3 -m venv --without-pip .venv` also works for now, since there are no
+packages to install yet.
 
 **1. Create and activate a virtual environment** (once; the `.venv` folder is
 git-ignored)
