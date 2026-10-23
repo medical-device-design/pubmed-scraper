@@ -1,9 +1,9 @@
 # pubmed-scraper
 A data scraper for getting information for Knowledge Graph building
 
-Collects PubMed papers on medical-device research by research type (in vitro
-first; in vivo, safety and effectiveness planned) through NCBI's E-utilities,
-and turns them into tables ready for loading into the medical-device-kg graph.
+Collects PubMed papers on medical-device research by research type (in vitro,
+in vivo, safety and effectiveness) through NCBI's E-utilities, and turns them
+into tables ready for loading into the medical-device-kg graph.
 
 ## Setup
 
@@ -66,6 +66,17 @@ python -m pubmed_scraper runs in_vitro                # list the runs saved so f
 Queries live in `topics.toml`. Each topic's query is combined with the shared
 device filter as `(device_filter) AND (topic)`.
 
+| Topic | Papers (Oct 2026) |
+|---|---|
+| `in_vitro` | 68,829 |
+| `in_vivo` | 43,439 |
+| `safety` | 52,840 |
+| `effectiveness` | 79,048 |
+
+Each topic is saved in its own folder, so a paper matching several topics is
+saved under each one: about 244,000 records in all, for about 194,000 unique
+papers.
+
 NCBI asks that large jobs run on weekends or 9 PM to 5 AM US Eastern.
 
 ### The usual cycle
@@ -90,57 +101,67 @@ topic's query in `topics.toml` changed since then (do a full fetch instead).
 `annotate` downloads NCBI's PubTator3 text-mining results for every fetched
 paper: genes, diseases, chemicals, species, variants and cell lines, each
 linked to a standard ID (NCBI Gene, MeSH, NCBI Taxonomy), plus relations
-between them. No key is needed. It takes about 8 seconds per 100 papers, so a
-full in vitro run (~69,000 papers) takes around 1.5 hours. If it stops partway,
+between them. No key is needed. Speed depends on the network: on the VM, the
+whole first in vitro run (~69,000 papers, fetch and annotation included) took
+about 12 minutes, while from a home connection annotation alone ran at about
+8 seconds per 100 papers (around 1.5 hours). If it stops partway,
 run it again and it continues where it left off. The newest papers may not be
 in PubTator3 yet; they are counted in the output and get picked up by a later
 update once they change.
 
 ## Running on the VM
 
-`scripts/run_pipeline.sh` runs fetch, annotate and parse for one topic in a
-row, unattended. Do the Setup steps above on the VM first (create `.venv`,
-add `.env`).
+`scripts/run_pipeline.sh` runs fetch, annotate and parse for every topic in
+`topics.toml`, one after another, unattended. Do the Setup steps above on the
+VM first (create `.venv`, add `.env`).
 
 **Start a run in the background** (keeps going after you log out):
 ```bash
-bash scripts/run_pipeline.sh in_vitro --background
+bash scripts/run_pipeline.sh --background
 ```
-It prints where the log is and returns. The first run does a full fetch
-(about 10 minutes, then about 1.5 hours of PubTator3 annotation). Later runs
-fetch only what changed.
+It prints where the log is and returns. A topic's first run does a full fetch,
+annotation and tables (about 12 minutes for in vitro on the VM, so roughly 45
+minutes for all four). After that, runs fetch only what changed and take a few
+minutes per topic. To run one topic only, name it:
+`bash scripts/run_pipeline.sh in_vitro --background`.
 
 **Check on it:**
 ```bash
-tail -f logs/in_vitro-*.log             # live progress (Ctrl+C stops watching, not the run)
-cat logs/in_vitro.status                # result of the last run: OK, PARTIAL or FAILED
-python -m pubmed_scraper runs in_vitro  # what has been collected
+tail -f $(ls -t logs/all-*.log | head -1)  # live progress (Ctrl+C stops watching, not the run)
+cat logs/all.status                        # result of the last run, with a line per topic
+python -m pubmed_scraper runs in_vitro     # what has been collected for a topic
 ```
 
-`PARTIAL` means the PubMed data was updated but PubTator3 failed (for example
-if the service was down). Run the script again later; annotation continues
-where it stopped.
+Each topic ends `OK`, `PARTIAL` or `FAILED`, and the run as a whole gets the
+worst of them. If one topic fails, the others still run. `PARTIAL` means the
+PubMed data was updated but PubTator3 failed (for example if the service was
+down); run the script again later and annotation continues where it stopped.
 
-**Choose the kind of run** with a second argument: `auto` (default: full
-the first time, update after), `full`, or `update`. Do a `full` run every few
-months to drop papers that no longer match:
+**Choose the kind of run** with an argument: `auto` (default: full the first
+time a topic runs, update after), `full`, or `update`. Do a `full` run every
+few months to drop papers that no longer match:
 ```bash
-bash scripts/run_pipeline.sh in_vitro full --background
+bash scripts/run_pipeline.sh full --background
 ```
 
-**Run it on a schedule with cron.** Run `crontab -e` and add a line like this
-(every Sunday at 2 AM, inside NCBI's off-peak window), with your repo's path:
+**Keep the data up to date with cron.** The same script is the updater. Run
+`crontab -e` and add this line (every Sunday at 2 AM, inside NCBI's off-peak
+window), with your repo's path:
 ```
-0 2 * * 0  bash /home/<you>/pubmed-scraper/scripts/run_pipeline.sh in_vitro
+0 2 * * 0  bash /home/<you>/pubmed-scraper/scripts/run_pipeline.sh
 ```
+A topic added to `topics.toml` later, or one whose query you change, gets a
+full fetch the next time cron runs; the others get updates.
 
-Two runs of the same topic never overlap: if one is still going, a new one
-exits straight away (exit code 75). To keep data on a bigger disk, set
-`SCRAPER_OPTS="--data-dir /path/to/disk"` before the command.
+Only one run happens at a time, since all topics share the API key's rate
+limit: if one is still going, a new one exits straight away (exit code 75).
+To keep data on a bigger disk, set `SCRAPER_OPTS="--data-dir /path/to/disk"`
+before the command.
 
-The full in vitro data takes about 2 GB of disk (raw XML, PubTator3 output and
-tables). Each new full run adds another copy; delete old run folders under
-`data/raw/` by hand once a newer full run has finished.
+All four topics take about 7 GB of disk (raw XML, PubTator3 output and
+tables; in vitro alone is about 2 GB). Each new full run adds another copy;
+delete old run folders under `data/raw/` by hand once a newer full run has
+finished.
 
 ## Output
 

@@ -15,19 +15,26 @@
 # so expect some lab-method papers in the results.
 query = '"Equipment and Supplies"[MeSH Major Topic]'
 
+# Each topic is fetched into its own folder, so a paper that matches several
+# topics is saved under each one. Counts below are from October 2026.
+
 [topics.in_vitro]
 label = "In vitro"
 query = '"in vitro"[tiab] OR "In Vitro Techniques"[MeSH Terms]'
 
-# Planned next. Uncomment once in vitro looks right.
-# [topics.in_vivo]
-# label = "In vivo"
-# query = '"in vivo"[tiab]'
-#
-# [topics.safety]
-# label = "Safety"
-# query = 'safety[tiab] OR "Equipment Safety"[MeSH Terms]'
-#
-# [topics.effectiveness]
-# label = "Effectiveness"
-# query = 'effectiveness[tiab] OR efficacy[tiab] OR "Treatment Outcome"[MeSH Terms]'
+[topics.in_vivo]
+label = "In vivo"
+# "Models, Animal" adds animal studies that never say "in vivo" (33k -> 43k).
+query = '"in vivo"[tiab] OR "Models, Animal"[MeSH Terms]'
+
+[topics.safety]
+label = "Safety"
+# Adding complication*[tiab] or "adverse event"[tiab] takes this from 53k to
+# 216k, mostly general surgical-outcome papers, so they are left out.
+query = 'safety[tiab] OR "Equipment Safety"[MeSH Terms]'
+
+[topics.effectiveness]
+label = "Effectiveness"
+# "Treatment Outcome"[MeSH Terms] is left out: NLM adds it to almost every
+# clinical paper, and it would take this from 79k to 188k.
+query = 'effectiveness[tiab] OR efficacy[tiab]'

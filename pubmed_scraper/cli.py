@@ -79,7 +79,8 @@ def main(argv=None):
                     help="where raw and processed data go (default: data/ in the repo)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("topics", help="list configured topics and their full queries")
+    p = sub.add_parser("topics", help="list configured topics and their full queries")
+    p.add_argument("--names", action="store_true", help="only the names, one per line (for scripts)")
 
     p = sub.add_parser("count", help="how many PubMed papers match a topic")
     p.add_argument("topic")
@@ -110,7 +111,7 @@ def main(argv=None):
 
     if a.cmd == "topics":
         for name, t in load_topics(a.config).items():
-            print(f"{name}  ({t.label})\n  {t.full_query}\n")
+            print(name if a.names else f"{name}  ({t.label})\n  {t.full_query}\n")
         return 0
 
     topic = get_topic(a.topic, a.config)
