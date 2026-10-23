@@ -130,7 +130,7 @@ def parse_article(art):
         for c in mc.findall("CommentsCorrectionsList/CommentsCorrections"))
 
     databanks = []
-    for db in mc.findall("DataBankList/DataBank"):
+    for db in a.findall("DataBankList/DataBank"):
         databanks.append({
             "name": (db.findtext("DataBankName") or "").strip(),
             "accessions": [(x.text or "").strip()

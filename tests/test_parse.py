@@ -36,12 +36,12 @@ SAMPLE = """
    <GrantList><Grant><GrantID>R01 AR000000</GrantID><Agency>NIAMS NIH HHS</Agency><Country>United States</Country></Grant></GrantList>
    <PublicationTypeList><PublicationType UI="D016428">Journal Article</PublicationType></PublicationTypeList>
    <ArticleDate DateType="Electronic"><Year>2024</Year><Month>01</Month><Day>15</Day></ArticleDate>
+   <DataBankList><DataBank><DataBankName>ClinicalTrials.gov</DataBankName>
+    <AccessionNumberList><AccessionNumber>NCT01234567</AccessionNumber>
+     <AccessionNumber>not-an-nct</AccessionNumber></AccessionNumberList></DataBank></DataBankList>
   </Article>
   <ChemicalList><Chemical><RegistryNumber>D1JT611TNE</RegistryNumber>
    <NameOfSubstance UI="D014025">Titanium</NameOfSubstance></Chemical></ChemicalList>
-  <DataBankList><DataBank><DataBankName>ClinicalTrials.gov</DataBankName>
-   <AccessionNumberList><AccessionNumber>NCT01234567</AccessionNumber>
-    <AccessionNumber>not-an-nct</AccessionNumber></AccessionNumberList></DataBank></DataBankList>
   <MeshHeadingList>
    <MeshHeading><DescriptorName UI="D006622" MajorTopicYN="Y">Hip Prosthesis</DescriptorName></MeshHeading>
    <MeshHeading><DescriptorName UI="D011475" MajorTopicYN="N">Prosthesis Failure</DescriptorName>
